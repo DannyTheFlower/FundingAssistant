@@ -1,0 +1,15 @@
+fastapi~=0.115.11
+uvicorn[standard]
+aiomoex>=2.1.2
+aiohttp~=3.11.14
+pandas~=2.2.3
+openpyxl
+beautifulsoup4~=4.13.4
+lxml
+sqlmodel~=0.0.24
+async-lru
+python-dotenv
+pydantic~=2.10.6
+pydantic-settings
+streamlit~=1.44.1
+requests~=2.32.3
