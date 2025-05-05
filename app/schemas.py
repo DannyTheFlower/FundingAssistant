@@ -3,7 +3,7 @@ from typing import List, Literal, Dict
 from pydantic import BaseModel, Field
 
 
-Weighting = Literal["equal", "market_cap", "cap_freefloat", "custom"]
+Weighting = Literal["equal", "market_cap", "cap_freefloat", "cap_divyield", "custom"]
 
 
 class SecurityIn(BaseModel):
@@ -28,3 +28,23 @@ class IndexOut(BaseModel):
 class IndexValue(BaseModel):
     date: date
     value: float
+
+
+class IndexInfo(BaseModel):
+    id: int
+    name: str
+    base_date: date
+    weighting: str
+    base_value: float
+
+    class Config:
+        from_attributes = True
+
+
+class IndexPoint(BaseModel):
+    date: date
+    value: float
+    imoex: float | None
+
+    class Config:
+        from_attributes = True

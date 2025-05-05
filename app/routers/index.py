@@ -1,10 +1,11 @@
+import pandas as pd
 from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlmodel import Session, select
-from schemas import IndexCreate, IndexOut, IndexValue
+from schemas import IndexCreate, IndexOut, IndexValue, IndexInfo, IndexPoint
 from models import Index, IndexComponent
 from database import engine
-from services import moex, index_builder
+from services import moex, index_builder, benchmark
 
 router = APIRouter(prefix="/index", tags=["Custom Index"])
 
@@ -21,7 +22,9 @@ async def create_index(req: IndexCreate, session: Session = Depends(get_session)
     if df_sel.empty:
         raise HTTPException(400, "No securities found in selected quarter table")
     ff_df = await moex.free_float()
+    dy_df = await moex.div_yield_df()
     df_sel = df_sel.merge(ff_df[["secid", "free_float"]], on="secid", how="left")
+    df_sel = df_sel.merge(dy_df[["state_reg", "div_yield"]], on="state_reg", how="left")
     df_sel = df_sel.loc[df_sel["secid"].isin([sec.secid for sec in req.securities])].copy()
     df_sel = df_sel.set_index("secid")
     custom = {s.secid: s.custom_weight for s in req.securities if s.custom_weight is not None}
@@ -54,16 +57,44 @@ async def get_value(index_id: int, session: Session = Depends(get_session)):
     return IndexValue(date=date.today(), value=current_val)
 
 
-@router.get("/{index_id}/series")
+@router.get("/{index_id}/series", response_model=list[IndexPoint])
 async def index_series(
     index_id: int,
-    from_: date = Query(..., alias="from"),
-    till: date = Query(..., alias="till"),
+    d_from: date = Query(..., alias="from"),
+    d_till: date = Query(..., alias="till"),
     session: Session = Depends(lambda: Session(engine)),
 ):
-    idx = session.get(Index, index_id)
+    weights = {c.secid: c.weight for c in session.exec(
+        select(IndexComponent).where(IndexComponent.index_id == index_id)
+    )}
+    df_val = await index_builder.compute_series(weights, d_from, d_till)
+    df_val = pd.DataFrame.from_dict(df_val)
+    df_bm = await benchmark.get_imoex_series(d_from, d_till)
+    df_val["date"] = pd.to_datetime(df_val["date"])
+    df_bm["date"] = pd.to_datetime(df_bm["date"])
+    df = pd.merge(df_val, df_bm, on="date", how="left") \
+        .rename(columns={"value": "value", "close": "imoex"})
+    df = df.dropna()
+    return df.to_dict(orient="records")
+
+
+@router.get("/indices", response_model=list[IndexInfo])
+async def find_indices(q: str | None = None, db: Session = Depends(get_session)):
+    """
+    Вернуть список индексов.  q = "строка" → поиск по id или name (case‑insensitive).
+    """
+    stmt = select(Index)
+    if q:
+        if q.isdigit():
+            stmt = stmt.where(Index.id == int(q))
+        else:
+            stmt = stmt.where(Index.name.ilike(f"%{q}%"))
+    return db.exec(stmt).all()
+
+
+@router.get("/{index_id}", response_model=IndexInfo)
+async def get_index(index_id: int, db: Session = Depends(get_session)):
+    idx = db.get(Index, index_id)
     if not idx:
         raise HTTPException(404, "Index not found")
-    comps = session.exec(select(IndexComponent).where(IndexComponent.index_id == index_id)).all()
-    weights = {c.secid: c.weight for c in comps}
-    return await index_builder.compute_series(weights, from_, till)
+    return idx

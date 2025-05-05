@@ -28,6 +28,7 @@ class Capitalization(SQLModel, table=True):
     quarter: int
     secid: str
     name: str
+    state_reg: str
     shares_out: Optional[int]
     price: Optional[float]
     cap: Optional[float]
@@ -39,3 +40,17 @@ class FreeFloat(SQLModel, table=True):
     date: date
     secid: str
     free_float: float
+
+
+class DividendYield(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    year: int
+    state_reg: str = Field(index=True)
+    div_yield: float
+    loaded_at: date = Field(default_factory=date.today)
+
+
+class ImoexPrice(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    date: date
+    close: float

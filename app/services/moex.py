@@ -4,7 +4,7 @@ from datetime import date
 from urllib.parse import urljoin
 from sqlmodel import Session, select
 from database import engine
-from models import Capitalization, FreeFloat
+from models import Capitalization, FreeFloat, DividendYield
 
 
 BASE_URL = "https://www.moex.com"
@@ -18,7 +18,7 @@ DIV_URL = "https://web.moex.com/moex-web-icdb-api/api/v1/export/site-dividend-yi
 
 def _df_from_cap(rows):
     return pd.DataFrame([r.dict() for r in rows])[
-        ["secid", "name", "shares_out", "price", "cap"]
+        ["secid", "name", "state_reg", "shares_out", "price", "cap"]
     ]
 
 
@@ -95,7 +95,7 @@ async def _scrape_cap(year: int, quarter: int) -> pd.DataFrame:
         df["price"].astype(str).str.replace(" ", "").str.replace(",", ".").astype(float)
     )
     df["secid"] = df["secid"].str.strip()
-    return df[["secid", "name", "shares_out", "price", "cap"]]
+    return df[["secid", "name", "state_reg", "shares_out", "price", "cap"]]
 
 
 async def cap_table_q(year: int, quarter: int):
@@ -115,6 +115,7 @@ async def cap_table_q(year: int, quarter: int):
                     quarter=quarter,
                     secid=row.secid,
                     name=row.name,
+                    state_reg=row.state_reg,
                     shares_out=row.shares_out,
                     price=row.price,
                     cap=row.cap,
@@ -154,6 +155,46 @@ async def free_float() -> pd.DataFrame:
             ss.merge(FreeFloat(date=date.today(), secid=row.secid, free_float=row.free_float))
         ss.commit()
     return df[["secid", "free_float"]]
+
+
+async def div_yield_df(year: int = 2020) -> pd.DataFrame:
+    with Session(engine) as ses:
+        rows = ses.exec(select(DividendYield).where(DividendYield.year == year)).all()
+        if rows:
+            return pd.DataFrame([r.dict(exclude={"id", "year", "loaded_at"}) for r in rows])
+
+    df = await _load_xlsx(DIV_URL)
+
+    col = f"Дивидендная доходность за {year} год, (D/Mp)%"
+    if col not in df.columns:
+        raise ValueError(f"Колонка «{col}» не найдена в xlsx")
+
+    df = df[["Регистрационный номер выпуска/ ISIN", col]].copy()
+    df.rename(columns={
+        "Регистрационный номер выпуска/ ISIN": "state_reg",
+        col: "div_yield"
+    }, inplace=True)
+
+    df["div_yield"] = (
+        df["div_yield"]
+        .astype(str)
+        .str.replace(",", ".", regex=False)
+        .str.replace(" ", "", regex=False)
+        .replace("не рассчитывается", None)
+        .astype(float)
+    )
+    df = df.dropna(subset=["div_yield"])
+
+    with Session(engine) as ses:
+        ses.add_all([
+            DividendYield(year=year,
+                          state_reg=row.state_reg.strip(),
+                          div_yield=row.div_yield)
+            for row in df.itertuples()
+        ])
+        ses.commit()
+
+    return df
 
 
 async def list_securities(year: int, quarter: int) -> list[tuple[str, str]]:

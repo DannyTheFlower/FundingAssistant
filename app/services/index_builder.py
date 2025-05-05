@@ -15,6 +15,9 @@ async def build_weights(
     elif weighting == "cap_freefloat":
         w_cap_ff = df_cap.cap * df_cap.free_float / 100
         w = (w_cap_ff / w_cap_ff.sum()).to_dict()
+    elif weighting == "cap_divyield":
+        w_cap_dy = df_cap.cap * df_cap.div_yield / 100
+        w = (w_cap_dy / w_cap_dy.sum()).to_dict()
     elif weighting == "custom":
         if not custom:
             raise ValueError("custom_weight dict required")
