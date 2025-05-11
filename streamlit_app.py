@@ -1,4 +1,4 @@
-import streamlit as st, requests, pandas as pd, datetime as dt
+import streamlit as st, requests, pandas as pd, datetime as dt, altair as alt
 
 
 BASE = "http://localhost:8000/api"
@@ -107,5 +107,57 @@ with tabs[0]:
                     st.warning(s.text)
 
 with tabs[1]:
-    st.header("🔮 Прогнозирование доходности (в разработке)")
-    st.info("Здесь появится модель прогнозирования GARCH.")
+    st.header("🔮Прогнозирование доходности портфеля")
+
+    if "securities_df" not in st.session_state or st.session_state["securities_df"].empty:
+        st.info("Сначала на вкладке «Конструктор» нажмите «Получить бумаги»")
+
+    df_sec = st.session_state["securities_df"]
+    if not df_sec.empty:
+        st.subheader("Выбор активов и количеств акций")
+        picks = st.multiselect(
+            "Бумаги:",
+            options=[f"{row.ID} – {row.Name}" for row in df_sec.itertuples()],
+        )
+        weights = {}
+        for p in picks:
+            secid = p.split(" – ")[0]
+            weights[secid] = st.number_input(
+                f"{secid} — кол-во акций", min_value=1, value=10, step=1
+            )
+        model_choice = st.radio(
+            "Алгоритм",
+            ["Быстрее (GARCH + CatBoost)", "Качественнее (TFT)"],
+            horizontal=True
+        )
+        model_code = "fast" if model_choice.startswith("Быстрее") else "quality"
+
+        if st.button("Смоделировать", disabled=not weights):
+            payload = {"assets": [{"secid": s, "shares": n} for s, n in weights.items()],
+                       "model": model_code}
+            r = requests.post(f"{BASE}/forecast", json=payload)
+            if r.ok:
+                data = r.json()
+                df_h = pd.DataFrame(data["history"], columns=["date", "value"]).set_index("date")
+                df_f = pd.DataFrame(data["forecast"], columns=["date", "value"]).set_index("date")
+                df_lo = pd.DataFrame(data["lo95"], columns=["date", "value"]).set_index("date")
+                df_hi = pd.DataFrame(data["hi95"], columns=["date", "value"]).set_index("date")
+
+                left, right = st.columns(2)
+                left.subheader("История портфеля")
+                left.line_chart(df_h)
+
+                right.subheader("Прогноз на 60 торговых дней")
+                base = alt.Chart(df_f.reset_index()).encode(x="date:T")
+                band = alt.Chart(
+                    pd.concat([df_lo, df_hi], axis=1, keys=["lo", "hi"]).reset_index()
+                ).mark_area(opacity=0.2).encode(x="date:T", y="lo:Q", y2="hi:Q")
+                line = base.mark_line(color="#1f77b4").encode(y="value:Q")
+                right.altair_chart(band + line, use_container_width=True)
+
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Среднегодовая волатильность", f"{data['metrics']['annual_volatility']:.2%}")
+                col2.metric("VaR 95%", f"{data['metrics']['VaR_95']:.2%}")
+                col3.metric("Вероятность роста портфеля через 60 дней", f"{data['metrics']['P_up_60d']:.1%}")
+            else:
+                st.error(r.text)

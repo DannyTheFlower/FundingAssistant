@@ -48,3 +48,21 @@ class IndexPoint(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SecurityWeight(BaseModel):
+    secid: str
+    shares: int
+
+
+class ForecastRequest(BaseModel):
+    assets: List[SecurityWeight]
+    model: Literal["fast", "quality"] = "fast"
+
+
+class ForecastResponse(BaseModel):
+    history: list[tuple[date, float]]
+    forecast: list[tuple[date, float]]
+    lo95: list[tuple[date, float]]
+    hi95: list[tuple[date, float]]
+    metrics: dict[str, float]

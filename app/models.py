@@ -54,3 +54,9 @@ class ImoexPrice(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     date: date
     close: float
+
+
+class Price(SQLModel, table=True):
+    secid: str = Field(default=None, primary_key=True)
+    trade_date: date = Field(default=None, primary_key=True, alias="date")
+    close: Optional[float]
