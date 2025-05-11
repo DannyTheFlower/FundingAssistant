@@ -59,13 +59,13 @@
 
 ```bash
 # 1. Клонируем репозиторий
-git clone https://github.com/DannyTheFlower/funding-assistant.git
-cd funding-assistant
+git clone https://github.com/DannyTheFlower/FundingAssistant.git
+cd FundingAssistant
 
 # 2. Создаем и активируем виртуальное окружение
 python -m venv .venv
-source .venv/bin/activate       # Linux/macOS
-.\.venv\Scripts\activate        # Windows
+source .venv/bin/activate  # Linux/macOS
+.\.venv\Scripts\activate   # Windows
 
 # 3. Устанавливаем зависимости
 pip install --upgrade pip
