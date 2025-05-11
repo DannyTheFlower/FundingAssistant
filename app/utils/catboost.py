@@ -52,7 +52,7 @@ def forecast_catboost(
     cb_features: list[str],
     horizon: int = 60
 ):
-    last_price = df.iloc[-1]["close"]
+    last_price = df.iloc[-1]["stat_pred"]
     preds, lo, hi = [], [], []
 
     garch_prices, vol = forecast_prices(last_price, garch_fit, horizon)
