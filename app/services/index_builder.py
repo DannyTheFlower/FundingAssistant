@@ -1,6 +1,6 @@
 import pandas as pd
 from datetime import date
-from services.moex import load_latest_prices
+from services.moex import load_latest_prices, candles_bulk
 
 
 async def build_weights(
@@ -35,7 +35,6 @@ async def compute_index_value(weights: dict[str, float]) -> float:
 
 async def compute_series(weights: dict[str, float], date_from: date, date_to: date):
     """Return list[{date,value}] daily using fixed weights."""
-    from .moex import candles_bulk
     bulk = await candles_bulk(list(weights), date_from, date_to)
     # build common date index
     all_dates = sorted({d for df in bulk.values() for d in df["date"].unique()})
@@ -46,7 +45,7 @@ async def compute_series(weights: dict[str, float], date_from: date, date_to: da
             df = bulk.get(s)
             if df is None:
                 continue
-            row = df[df.date == d]
+            row = df[df["date"] == d]
             if not row.empty:
                 val += row.iloc[0].close * w
         series.append({"date": str(d), "value": val})
