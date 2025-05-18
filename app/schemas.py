@@ -66,3 +66,7 @@ class ForecastResponse(BaseModel):
     lo95: list[tuple[date, float]]
     hi95: list[tuple[date, float]]
     metrics: dict[str, float]
+
+
+class ReportRequest(BaseModel):
+    assets: List[SecurityWeight]

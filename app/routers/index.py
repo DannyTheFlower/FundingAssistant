@@ -6,6 +6,7 @@ from schemas import IndexCreate, IndexOut, IndexValue, IndexInfo, IndexPoint
 from models import Index, IndexComponent
 from database import engine
 from services import moex, index_builder, benchmark
+from utils.stats import calc_stats
 
 router = APIRouter(prefix="/index", tags=["Custom Index"])
 
@@ -98,3 +99,31 @@ async def get_index(index_id: int, db: Session = Depends(get_session)):
     if not idx:
         raise HTTPException(404, "Index not found")
     return idx
+
+
+@router.get("/{index_id}/stats")
+async def stats(
+    index_id: int,
+    session: Session = Depends(get_session)
+):
+    idx = session.get(Index, index_id)
+    if not idx:
+        raise HTTPException(404, "Index not found")
+    comps = session.exec(
+        select(IndexComponent).where(IndexComponent.index_id == index_id)
+    ).all()
+    weights = {c.secid: c.weight for c in comps}
+
+    d0, d1 = idx.base_date, date.today()
+
+    idx_raw = await index_builder.compute_series(weights, d0, d1)
+    idx_ser = pd.Series(
+        [p["value"] for p in idx_raw],
+        index=pd.to_datetime([p["date"] for p in idx_raw])
+    )
+
+    bm_df = await benchmark.get_imoex_series(d0, d1)
+    bm_ser = bm_df.set_index("date")["close"]
+    bm_ser.index = pd.to_datetime(bm_ser.index)
+
+    return calc_stats(idx_ser, bm_ser)

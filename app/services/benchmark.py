@@ -1,4 +1,4 @@
-import aiohttp, pandas as pd, asyncio, io
+import aiohttp, pandas as pd
 import aiomoex
 from datetime import date, timedelta
 from sqlmodel import Session, select
